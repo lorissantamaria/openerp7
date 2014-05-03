@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+export PYTHONPATH=/usr/local/lib/python2.7/dist-packages
+PIDFILE=/var/run/openerp/openerp-server.pid
+LOCKFILE=/var/lock/subsys/openerp-server
+LOGFILE=/var/lib/openerp/logs/openerp-server.log
+
+OPTS="--pidfile=$PIDFILE --logfile=$LOGFILE"
+
+prog="openerp-server"
+desc="OpenERP Server Daemon"
+
+#Populate the volume if empty
+if [ ! -d /var/lib/openerp/conf ]; then 
+	mkdir -p /var/lib/openerp/{pgsql,conf,addons,logs,filestore}  
+	chown openerp:openerp /var/lib/openerp/{logs,filestore}
+	chown postgres:postgres /var/lib/openerp/pgsql
+fi
+
+if [ ! -d /var/lib/openerp/pgsql/data ]; then
+	/sbin/service postgresql-9.3 initdb
+	/sbin/service postgresql-9.3 start
+	su - postgres -c "createuser  --superuser openerp"
+else	/sbin/service postgresql-9.3 start
+fi
+
+if [ ! -f /var/lib/openerp/conf/openerp-server.conf ]; then
+	cp /etc/openerp-server.conf-default /var/lib/openerp/conf/openerp-server.conf
+	chown openerp:openerp /var/lib/openerp/conf/openerp-server.conf
+	chmod 600 /var/lib/openerp/conf/openerp-server.conf
+fi
+
+OPTS="$OPTS -c /var/lib/openerp/conf/openerp-server.conf"
+
+RETVAL=0
+
+echo -n $"Starting $desc ($prog): "
+daemon --user openerp --check openerp-server \
+	"/usr/bin/setsid /usr/local/bin/openerp-server $OPTS"
+
+RETVAL=$?
+echo
+[ $RETVAL -eq 0 ] && touch $LOCKFILE
+return $RETVAL
